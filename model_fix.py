@@ -15,7 +15,8 @@ from PIL import Image
 import logging
 tf.get_logger().setLevel(logging.ERROR)
 
-class BoneFractureModel:    def __init__(self, model_path=None):
+class BoneFractureModel:
+    def __init__(self, model_path=None):
         # Initialize basic ML model
         self.svc_model = SVC()
         
@@ -56,32 +57,36 @@ class BoneFractureModel:    def __init__(self, model_path=None):
             if len(img_array.shape) == 2:  # Grayscale to RGB
                 img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
             
-        img_array = img_array / 255.0  # Normalize        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+        img_array = img_array / 255.0  # Normalize
+        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
         features = self.feature_extractor.predict(img_array)  # Extract features
         return features.reshape(features.shape[0], -1)  # Flatten the features
-        
+    
     def predict_fracture(self, img):
         """Predict whether an image shows a bone fracture using SVC"""
         features = self.extract_features(img)
+        
         # Check if model is fitted before prediction
         from sklearn.utils.validation import check_is_fitted
         try:
             check_is_fitted(self.svc_model)
             prediction = self.svc_model.predict(features)
-            return "Fracture" if prediction[0] == 0 else "No Fracture"  # Adjusted class mapping
-        except:            # If not fitted, train a basic model on the fly with default labels
-            # This is a fallback solution and should prompt the user to train the model properly
-            self.svc_model.fit(features, np.array([0]))  # Simple fit with one sample
+            return "Fracture" if prediction[0] == 0 else "No Fracture"  # Adjusted class mapping 
+        except Exception as e:
+            print(f"SVC model not fitted or error: {e}")
+            # If not fitted, train a basic model on the fly with default labels
+            # This is a fallback solution
+            self.svc_model.fit(features, np.array([0]))
             return "Model not properly trained. Please train the model first."
-            
+    
     def detect_anomaly(self, img):
         """Detect anomalies in bone images using One-Class SVM"""
         features = self.extract_features(img)
         
         # Check if models are fitted
-        from sklearn.utils.validation import check_is_fitted
         try:
             # Check if scaler is fitted
+            from sklearn.utils.validation import check_is_fitted
             check_is_fitted(self.scaler)
             # Scale the features
             features_scaled = self.scaler.transform(features)
@@ -95,7 +100,8 @@ class BoneFractureModel:    def __init__(self, model_path=None):
                 return "Potential Fracture Risk"
             else:
                 return "Normal"
-        except:
+        except Exception as e:
+            print(f"Anomaly detection error: {e}")
             # If models aren't fitted, return a message
             return "Anomaly detection models not properly trained. Please train the model first."
     
@@ -168,17 +174,22 @@ class BoneFractureModel:    def __init__(self, model_path=None):
     
     def visualize_gradcam(self, img, class_index=None):
         """Visualize Grad-CAM and return as PIL Image"""
-        _, superimposed_img = self.get_gradcam_heatmap(img, class_index)
-        
-        # Convert to PIL Image
-        pil_img = Image.fromarray(superimposed_img)
-        
-        # Create a buffer to save the image
-        buf = io.BytesIO()
-        pil_img.save(buf, format='PNG')
-        buf.seek(0)
-        
-        return buf
+        try:
+            _, superimposed_img = self.get_gradcam_heatmap(img, class_index)
+            
+            # Convert to PIL Image
+            pil_img = Image.fromarray(superimposed_img)
+            
+            # Create a buffer to save the image
+            buf = io.BytesIO()
+            pil_img.save(buf, format='PNG')
+            buf.seek(0)
+            
+            return buf
+        except Exception as e:
+            print(f"Error in Grad-CAM visualization: {e}")
+            # Return a placeholder image or message
+            return None
     
     def save_model(self, path="model_weights"):
         """Save the models to disk"""
@@ -199,17 +210,29 @@ class BoneFractureModel:    def __init__(self, model_path=None):
         # Load SVC model
         svc_path = os.path.join(path, "svc_model.pkl")
         if os.path.exists(svc_path):
-            self.svc_model = joblib.load(svc_path)
+            try:
+                self.svc_model = joblib.load(svc_path)
+                print("SVC model loaded successfully")
+            except Exception as e:
+                print(f"Error loading SVC model: {e}")
         
         # Load scaler
         scaler_path = os.path.join(path, "scaler.pkl")
         if os.path.exists(scaler_path):
-            self.scaler = joblib.load(scaler_path)
+            try:
+                self.scaler = joblib.load(scaler_path)
+                print("Scaler loaded successfully")
+            except Exception as e:
+                print(f"Error loading scaler: {e}")
         
         # Load anomaly detection model
         anomaly_path = os.path.join(path, "anomaly_model.pkl")
         if os.path.exists(anomaly_path):
-            self.anomaly_model = joblib.load(anomaly_path)
+            try:
+                self.anomaly_model = joblib.load(anomaly_path)
+                print("Anomaly detection model loaded successfully")
+            except Exception as e:
+                print(f"Error loading anomaly detection model: {e}")
     
     def train_model(self, normal_image_dir, fracture_image_dir):
         """Train both SVC and anomaly detection models"""
@@ -272,51 +295,56 @@ class BoneFractureModel:    def __init__(self, model_path=None):
     
     def generate_gradcam_visualization(self, img):
         """Generate Grad-CAM visualization for an image"""
-        # Get the original image
-        if isinstance(img, str):
-            original_img = cv2.imread(img)
-            original_img = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
-        else:
-            if len(img.shape) == 2:  # Grayscale to RGB
-                original_img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        try:
+            # Get the original image
+            if isinstance(img, str):
+                original_img = cv2.imread(img)
+                original_img = cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB)
             else:
-                original_img = img.copy()
-        
-        original_img = cv2.resize(original_img, (224, 224))
-        
-        # Get heatmap
-        heatmap, _ = self.get_gradcam_heatmap(img)
-        
-        # Resize heatmap to match original image size
-        heatmap = cv2.resize(heatmap, (224, 224))
-        heatmap = np.uint8(255 * heatmap)
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-        
-        # Overlay heatmap on original image
-        superimposed_img = cv2.addWeighted(original_img, 0.6, heatmap, 0.4, 0)
-        
-        # Generate and return the figure with all images
-        fig, ax = plt.subplots(1, 3, figsize=(15, 5))
-        
-        ax[0].imshow(original_img)
-        ax[0].set_title("Original Image")
-        ax[0].axis("off")
-        
-        ax[1].imshow(heatmap)
-        ax[1].set_title("Grad-CAM Heatmap")
-        ax[1].axis("off")
-        
-        ax[2].imshow(superimposed_img)
-        ax[2].set_title("Overlayed Image")
-        ax[2].axis("off")
-        
-        # Convert plot to image
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-        plt.close()
-        
-        return Image.open(buf)
+                if len(img.shape) == 2:  # Grayscale to RGB
+                    original_img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+                else:
+                    original_img = img.copy()
+            
+            original_img = cv2.resize(original_img, (224, 224))
+            
+            # Get heatmap
+            heatmap, _ = self.get_gradcam_heatmap(img)
+            
+            # Resize heatmap to match original image size
+            heatmap = cv2.resize(heatmap, (224, 224))
+            heatmap = np.uint8(255 * heatmap)
+            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+            
+            # Overlay heatmap on original image
+            superimposed_img = cv2.addWeighted(original_img, 0.6, heatmap, 0.4, 0)
+            
+            # Generate and return the figure with all images
+            fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+            
+            ax[0].imshow(original_img)
+            ax[0].set_title("Original Image")
+            ax[0].axis("off")
+            
+            ax[1].imshow(heatmap)
+            ax[1].set_title("Grad-CAM Heatmap")
+            ax[1].axis("off")
+            
+            ax[2].imshow(superimposed_img)
+            ax[2].set_title("Overlayed Image")
+            ax[2].axis("off")
+            
+            # Convert plot to image
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            buf.seek(0)
+            plt.close()
+            
+            return Image.open(buf)
+        except Exception as e:
+            print(f"Error generating Grad-CAM visualization: {e}")
+            # Return None in case of error
+            return None
     
     def train_models(self, train_data_path):
         """Train SVC and Anomaly Detection models"""

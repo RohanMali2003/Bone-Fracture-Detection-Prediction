@@ -56,11 +56,11 @@ class BoneFractureModel:
             img_array = cv2.resize(img, (224, 224))
             if len(img_array.shape) == 2:  # Grayscale to RGB
                 img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
-              img_array = img_array / 255.0  # Normalize
+            img_array = img_array / 255.0  # Normalize
         img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
         features = self.feature_extractor.predict(img_array)  # Extract features
         return features.reshape(features.shape[0], -1)  # Flatten the features
-        
+    
     def predict_fracture(self, img):
         """Predict whether an image shows a bone fracture using SVC"""
         features = self.extract_features(img)
@@ -69,7 +69,11 @@ class BoneFractureModel:
         try:
             check_is_fitted(self.svc_model)
             prediction = self.svc_model.predict(features)
-            return "Fracture" if prediction[0] == 0 else "No Fracture"  # Adjusted class mapping
+            # Return a consistent format: "Fracture" or "No Fracture"
+            # Based on our dataset labeling: 0 = fractured, 1 = not_fractured
+            result = "Fracture" if prediction[0] == 0 else "No Fracture"
+            print(f"Prediction value: {prediction[0]}, Result: {result}")
+            return result
         except Exception as e:
             # If not fitted or feature mismatch occurs, return error message
             print(f"SVC model error: {e}")

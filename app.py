@@ -89,11 +89,10 @@ if uploaded_file is not None:
         if detection_mode == "SVC Fracture Detection":
             with st.spinner("Analyzing with SVC model..."):
                 result = model.predict_fracture(img_cv)
-                
                 # Display result
-                st.markdown(f"### Diagnosis: **{result.replace('_', ' ').title()}**")
+                st.markdown(f"### Diagnosis: **{result}**")
                 
-                if result == "fractured":
+                if result == "Fracture":
                     st.error("⚠️ Fracture detected! Seek medical attention.")
                 else:
                     st.success("✅ No fracture detected.")

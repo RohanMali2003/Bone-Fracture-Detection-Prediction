@@ -31,9 +31,20 @@ class BoneFractureModel:
         # For Grad-CAM
         self.full_model = MobileNetV2(weights="imagenet", include_top=True, input_shape=(224, 224, 3))
         
-        # If model path is provided, load the saved models
-        if model_path and os.path.exists(model_path):
-            self.load_model(model_path)
+        # Track if models are properly loaded
+        self.models_loaded = False
+        
+        # If model path is provided, try to load the saved models
+        if model_path:
+            if os.path.exists(model_path):
+                try:
+                    self.load_model(model_path)
+                    self.models_loaded = True
+                    print(f"Models loaded successfully from {model_path}")
+                except Exception as e:
+                    print(f"Error loading models: {e}")
+            else:
+                print(f"Warning: Model path {model_path} does not exist. Models will need to be trained.")
     
     def extract_features(self, img):
         """Extract features from an image using MobileNetV2"""
@@ -45,8 +56,7 @@ class BoneFractureModel:
             img_array = cv2.resize(img, (224, 224))
             if len(img_array.shape) == 2:  # Grayscale to RGB
                 img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
-            
-        img_array = img_array / 255.0  # Normalize
+            img_array = img_array / 255.0  # Normalize
         img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
         features = self.feature_extractor.predict(img_array)  # Extract features
         return features.reshape(features.shape[0], -1)  # Flatten the features
@@ -54,21 +64,46 @@ class BoneFractureModel:
     def predict_fracture(self, img):
         """Predict whether an image shows a bone fracture using SVC"""
         features = self.extract_features(img)
-        prediction = self.svc_model.predict(features)
-        return "Fracture" if prediction[0] == 1 else "No Fracture"
-    
+        # Check if model is fitted before prediction
+        from sklearn.utils.validation import check_is_fitted
+        try:
+            check_is_fitted(self.svc_model)
+            prediction = self.svc_model.predict(features)
+            # Return a consistent format: "Fracture" or "No Fracture"
+            # Based on our dataset labeling: 0 = fractured, 1 = not_fractured
+            result = "Fracture" if prediction[0] == 0 else "No Fracture"
+            print(f"Prediction value: {prediction[0]}, Result: {result}")
+            return result
+        except Exception as e:
+            # If not fitted or feature mismatch occurs, return error message
+            print(f"SVC model error: {e}")
+            # Don't attempt to train a model on the fly as it would need 2+ classes
+            return "Model not properly trained. Please train the model with proper training data first."
+            
     def detect_anomaly(self, img):
         """Detect anomalies in bone images using One-Class SVM"""
         features = self.extract_features(img)
-        # Scale the features
-        features_scaled = self.scaler.transform(features)
-        # Predict using anomaly detection model
-        prediction = self.anomaly_model.predict(features_scaled)
         
-        if prediction[0] == -1:
-            return "Potential Fracture Risk"
-        else:
-            return "Normal"
+        # Check if models are fitted
+        from sklearn.utils.validation import check_is_fitted
+        try:
+            # Check if scaler is fitted
+            check_is_fitted(self.scaler)
+            # Scale the features
+            features_scaled = self.scaler.transform(features)
+            
+            # Check if anomaly model is fitted
+            check_is_fitted(self.anomaly_model)
+            # Predict using anomaly detection model
+            prediction = self.anomaly_model.predict(features_scaled)
+            
+            if prediction[0] == -1:
+                return "Potential Fracture Risk"
+            else:
+                return "Normal"
+        except:
+            # If models aren't fitted, return a message
+            return "Anomaly detection models not properly trained. Please train the model first."
     
     def get_gradcam_heatmap(self, img, class_index=None):
         """Generate Grad-CAM heatmap to visualize important regions"""

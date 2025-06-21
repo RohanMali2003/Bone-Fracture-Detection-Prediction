@@ -2,17 +2,7 @@ import streamlit as st
 import os
 import numpy as np
 import cv2
-# Try to import from model_new first, then model_fix, and finally fallback to model
-try:
-    from model_new import BoneFractureModel
-    print("Using new model implementation")
-except ImportError:
-    try:
-        from model_fix import BoneFractureModel
-        print("Using fixed model implementation")
-    except ImportError:
-        from model import BoneFractureModel
-        print("Using original model implementation")
+from model import BoneFractureModel
 from PIL import Image
 import matplotlib.pyplot as plt
 import io
@@ -88,8 +78,7 @@ if uploaded_file is not None:
         # Process based on selected mode
         if detection_mode == "SVC Fracture Detection":
             with st.spinner("Analyzing with SVC model..."):
-                result = model.predict_fracture(img_cv)
-                # Display result
+                result = model.predict_fracture(img_cv)                # Display result
                 st.markdown(f"### Diagnosis: **{result}**")
                 
                 if result == "Fracture":

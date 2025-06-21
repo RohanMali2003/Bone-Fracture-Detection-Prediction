@@ -65,7 +65,8 @@ class BoneFractureModel:
         """Predict whether an image shows a bone fracture using SVC"""
         features = self.extract_features(img)
         # Check if model is fitted before prediction
-        from sklearn.utils.validation import check_is_fitted        try:
+        from sklearn.utils.validation import check_is_fitted        
+        try:
             check_is_fitted(self.svc_model)
             prediction = self.svc_model.predict(features)
             # Return a consistent format: "Fracture" or "No Fracture"

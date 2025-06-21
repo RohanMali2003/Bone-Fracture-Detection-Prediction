@@ -65,13 +65,14 @@ class BoneFractureModel:
         """Predict whether an image shows a bone fracture using SVC"""
         features = self.extract_features(img)
         # Check if model is fitted before prediction
-        from sklearn.utils.validation import check_is_fitted
-        try:
+        from sklearn.utils.validation import check_is_fitted        try:
             check_is_fitted(self.svc_model)
             prediction = self.svc_model.predict(features)
             # Return a consistent format: "Fracture" or "No Fracture"
-            # Based on our dataset labeling: 0 = fractured, 1 = not_fractured
-            result = "Fracture" if prediction[0] == 0 else "No Fracture"
+            # In train_model: Label 0 = normal, Label 1 = fracture
+            # In train_models: classes = {'fractured': 0, 'not_fractured': 1}
+            # Let's be consistent with the majority of the code
+            result = "Fracture" if prediction[0] == 1 else "No Fracture"
             print(f"Prediction value: {prediction[0]}, Result: {result}")
             return result
         except Exception as e:
@@ -230,7 +231,7 @@ class BoneFractureModel:
                 filepath = os.path.join(normal_image_dir, filename)
                 features = self.extract_features(filepath)
                 X_svc.append(features[0])
-                Y_svc.append(0)  # Label 0 for normal
+                Y_svc.append(0)  # Label 0 for normal (no fracture)
                 X.append(features[0])
                 Y.append(1)  # Dummy label for anomaly detection
         

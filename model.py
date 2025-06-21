@@ -245,8 +245,7 @@ class BoneFractureModel:
         img = cv2.resize(img, (200, 200))
         img = img.reshape(1, -1) / 255.0
         return img
-    
-    def predict_fracture(self, img):
+      def predict_fracture(self, img):
         """Predict if a bone is fractured using SVC model"""
         img_processed = self.preprocess_for_svc(img)
         prediction = self.svc_model.predict(img_processed)
@@ -257,7 +256,7 @@ class BoneFractureModel:
         feature_vector = self.extract_features(img)
         feature_vector_scaled = self.scaler.transform([feature_vector])
         prediction = self.anomaly_model.predict(feature_vector_scaled)
-          if prediction[0] == -1:
+        if prediction[0] == -1:
             return "Potential Fracture Risk"
         else:
             return "Normal"

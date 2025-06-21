@@ -1,6 +1,6 @@
 # Bone Fracture Detection & Prediction
 
-A machine learning application that detects bone fractures from X-ray images and predicts fracture risk. This project includes a Jupyter notebook for model development and a Streamlit web application for interactive use.
+A machine learning application that detects bone fractures from X-ray images and predicts fracture risk. This project includes a Streamlit web application for interactive use.
 
 ## Features
 
@@ -15,7 +15,7 @@ A machine learning application that detects bone fractures from X-ray images and
 1. Clone this repository:
 
    ```bash
-   git clone https://github.com/RohanMali2003/Bone-Fracture-Detection-Prediction.git
+   git clone https://github.com/yourusername/Bone-Fracture-Detection-Prediction.git
    cd Bone-Fracture-Detection-Prediction
    ```
 
@@ -30,12 +30,6 @@ A machine learning application that detects bone fractures from X-ray images and
 
    ```bash
    pip install -r requirements.txt
-   ```
-
-4. Set up directory structure:
-
-   ```bash
-   python setup_directories.py
    ```
 
 ## Quick Start
@@ -59,36 +53,6 @@ A machine learning application that detects bone fractures from X-ray images and
    - Grad-CAM Visualization: Shows which regions of the image influenced the model's decision
 3. **View the results and analysis**
 
-## Model Training
-
-If you want to retrain the models with your own dataset:
-
-1. Organize your dataset with the following structure:
-
-   ```
-   data/
-   ├── training_data/
-   │   ├── fractured/
-   │   │   ├── image1.jpg
-   │   │   ├── image2.jpg
-   │   │   └── ...
-   │   └── not_fractured/
-   │       ├── image1.jpg
-   │       ├── image2.jpg
-   │       └── ...
-   └── testing_data/
-       ├── fractured/
-       │   ├── image1.jpg
-       │   └── ...
-       └── not_fractured/
-           ├── image1.jpg
-           └── ...
-   ```
-
-2. Use the training section in the application (expand "Model Training")
-3. Enter the path to your training data directory
-4. Click "Train Models"
-
 ## Technical Details
 
 - **Feature Extraction**: MobileNetV2 pre-trained on ImageNet
@@ -96,7 +60,9 @@ If you want to retrain the models with your own dataset:
 - **Anomaly Detection**: One-Class SVM
 - **Visualization**: Gradient-weighted Class Activation Mapping (Grad-CAM)
 
-## Project Structure
+## Author
+
+Rohan Mali
 
 ```
 bone-fracture-detection/

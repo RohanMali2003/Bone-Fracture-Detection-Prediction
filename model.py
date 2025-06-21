@@ -12,6 +12,8 @@ import os
 import cv2
 import numpy as np
 import tensorflow as tf
+# Configure TensorFlow to use CPU and avoid errors with incompatible GPU versions
+tf.config.set_visible_devices([], 'GPU')
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.models import Model
 from sklearn.preprocessing import StandardScaler

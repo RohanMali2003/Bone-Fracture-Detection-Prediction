@@ -3,7 +3,6 @@ import cv2
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV2
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from tensorflow.keras.models import Model
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import OneClassSVM, SVC
@@ -11,6 +10,9 @@ import joblib
 import matplotlib.pyplot as plt
 import io
 from PIL import Image
+
+# Add TensorFlow compatibility flag
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 class BoneFractureModel:
     def __init__(self, model_path=None):
@@ -35,8 +37,9 @@ class BoneFractureModel:
     def extract_features(self, img):
         """Extract features from an image using MobileNetV2"""
         if isinstance(img, str):  # If img is a file path
-            img = load_img(img, target_size=(224, 224))
-            img_array = img_to_array(img)
+            # Use PIL for image loading instead of keras function
+            pil_img = Image.open(img).resize((224, 224))
+            img_array = np.array(pil_img.convert('RGB'))
         else:  # If img is already a numpy array
             img_array = cv2.resize(img, (224, 224))
             if len(img_array.shape) == 2:  # Grayscale to RGB
@@ -45,6 +48,192 @@ class BoneFractureModel:
         img_array = img_array / 255.0  # Normalize
         img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
         features = self.feature_extractor.predict(img_array)  # Extract features
+        return features.reshape(features.shape[0], -1)  # Flatten the features
+    
+    def predict_fracture(self, img):
+        """Predict whether an image shows a bone fracture using SVC"""
+        features = self.extract_features(img)
+        prediction = self.svc_model.predict(features)
+        return "Fracture" if prediction[0] == 1 else "No Fracture"
+    
+    def detect_anomaly(self, img):
+        """Detect anomalies in bone images using One-Class SVM"""
+        features = self.extract_features(img)
+        # Scale the features
+        features_scaled = self.scaler.transform(features)
+        # Predict using anomaly detection model
+        prediction = self.anomaly_model.predict(features_scaled)
+        
+        if prediction[0] == -1:
+            return "Potential Fracture Risk"
+        else:
+            return "Normal"
+    
+    def get_gradcam_heatmap(self, img, class_index=None):
+        """Generate Grad-CAM heatmap to visualize important regions"""
+        # Preprocess the image
+        if isinstance(img, str):
+            # Use PIL for image loading instead of keras function
+            pil_img = Image.open(img).resize((224, 224))
+            img_array = np.array(pil_img.convert('RGB'))
+        else:
+            img_array = cv2.resize(img, (224, 224))
+            if len(img_array.shape) == 2:  # Grayscale to RGB
+                img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
+        
+        img_array = img_array / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
+        
+        # Use the last convolutional layer for Grad-CAM
+        last_conv_layer = next(l for l in reversed(self.full_model.layers) if isinstance(l, tf.keras.layers.Conv2D))
+        
+        # Create a model that outputs both the last convolutional layer and predictions
+        grad_model = tf.keras.models.Model(
+            inputs=[self.full_model.inputs], 
+            outputs=[last_conv_layer.output, self.full_model.output]
+        )
+        
+        # Compute gradients
+        with tf.GradientTape() as tape:
+            conv_output, predictions = grad_model(img_array)
+            if class_index is None:
+                class_index = tf.argmax(predictions[0])
+            loss = predictions[:, class_index]
+        
+        # Extract gradients
+        grads = tape.gradient(loss, conv_output)
+        
+        # Compute guided gradients
+        guided_grads = tf.cast(conv_output > 0, "float32") * tf.cast(grads > 0, "float32") * grads
+        
+        # Average gradients spatially
+        weights = tf.reduce_mean(guided_grads, axis=(0, 1, 2))
+        
+        # Create a weighted combination of filters
+        cam = tf.reduce_sum(tf.multiply(weights, conv_output), axis=-1)
+        
+        # Process CAM
+        cam = cam.numpy()[0]
+        cam = np.maximum(cam, 0)  # ReLU
+        cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-7)  # Normalize
+        cam = cv2.resize(cam, (224, 224))
+        
+        # Create heatmap
+        heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
+        heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+        
+        # Convert input image back to uint8
+        input_img = (img_array[0] * 255).astype(np.uint8)
+        
+        # Superimpose heatmap on original image
+        superimposed_img = cv2.addWeighted(input_img, 0.6, heatmap, 0.4, 0)
+        
+        # Return both the heatmap and superimposed image
+        return cam, superimposed_img
+    
+    def visualize_gradcam(self, img, class_index=None):
+        """Visualize Grad-CAM and return as PIL Image"""
+        _, superimposed_img = self.get_gradcam_heatmap(img, class_index)
+        
+        # Convert to PIL Image
+        pil_img = Image.fromarray(superimposed_img)
+        
+        # Create a buffer to save the image
+        buf = io.BytesIO()
+        pil_img.save(buf, format='PNG')
+        buf.seek(0)
+        
+        return buf
+    
+    def save_model(self, path="model_weights"):
+        """Save the models to disk"""
+        if not os.path.exists(path):
+            os.makedirs(path)
+        
+        # Save SVC model
+        joblib.dump(self.svc_model, os.path.join(path, "svc_model.pkl"))
+        
+        # Save scaler
+        joblib.dump(self.scaler, os.path.join(path, "scaler.pkl"))
+        
+        # Save anomaly detection model
+        joblib.dump(self.anomaly_model, os.path.join(path, "anomaly_model.pkl"))
+    
+    def load_model(self, path="model_weights"):
+        """Load models from disk"""
+        # Load SVC model
+        svc_path = os.path.join(path, "svc_model.pkl")
+        if os.path.exists(svc_path):
+            self.svc_model = joblib.load(svc_path)
+        
+        # Load scaler
+        scaler_path = os.path.join(path, "scaler.pkl")
+        if os.path.exists(scaler_path):
+            self.scaler = joblib.load(scaler_path)
+        
+        # Load anomaly detection model
+        anomaly_path = os.path.join(path, "anomaly_model.pkl")
+        if os.path.exists(anomaly_path):
+            self.anomaly_model = joblib.load(anomaly_path)
+    
+    def train_model(self, normal_image_dir, fracture_image_dir):
+        """Train both SVC and anomaly detection models"""
+        X_svc = []  # Features for SVC
+        Y_svc = []  # Labels for SVC
+        X = []      # Features for anomaly detection (only normal samples)
+        Y = []      # Dummy labels for anomaly detection
+        
+        # Load normal images
+        for filename in os.listdir(normal_image_dir):
+            if filename.endswith(('.png', '.jpg', '.jpeg')):
+                filepath = os.path.join(normal_image_dir, filename)
+                features = self.extract_features(filepath)
+                X_svc.append(features[0])
+                Y_svc.append(0)  # Label 0 for normal
+                X.append(features[0])
+                Y.append(1)  # Dummy label for anomaly detection
+        
+        # Load fracture images
+        for filename in os.listdir(fracture_image_dir):
+            if filename.endswith(('.png', '.jpg', '.jpeg')):
+                filepath = os.path.join(fracture_image_dir, filename)
+                features = self.extract_features(filepath)
+                X_svc.append(features[0])
+                Y_svc.append(1)  # Label 1 for fracture
+        
+        # Convert to numpy arrays
+        X_svc = np.array(X_svc)
+        Y_svc = np.array(Y_svc)
+        X = np.array(X)
+        Y = np.array(Y)
+        
+        # Split data for SVC
+        train_ratio = 0.8
+        indices = np.random.permutation(len(X_svc))
+        train_count = int(len(X_svc) * train_ratio)
+        train_indices = indices[:train_count]
+        test_indices = indices[train_count:]
+        
+        xtrain = X_svc[train_indices]
+        ytrain = Y_svc[train_indices]
+        xtest = X_svc[test_indices]
+        ytest = Y_svc[test_indices]
+        
+        # Train SVC model
+        self.svc_model = SVC()
+        self.svc_model.fit(xtrain, ytrain)
+        
+        # Train anomaly detection model on normal samples only
+        self.scaler = StandardScaler()
+        X_scaled = self.scaler.fit_transform(X)
+        self.anomaly_model = OneClassSVM(kernel="rbf", gamma="auto", nu=0.05)
+        self.anomaly_model.fit(X_scaled)
+        
+        # Save trained models
+        self.save_model()
+        
+        # Return test accuracy
+        return self.svc_model.score(xtest, ytest)
         return features.flatten()  # Convert to 1D vector
     
     def preprocess_for_svc(self, img):
@@ -68,8 +257,7 @@ class BoneFractureModel:
         feature_vector = self.extract_features(img)
         feature_vector_scaled = self.scaler.transform([feature_vector])
         prediction = self.anomaly_model.predict(feature_vector_scaled)
-        
-        if prediction[0] == -1:
+          if prediction[0] == -1:
             return "Potential Fracture Risk"
         else:
             return "Normal"
@@ -78,8 +266,9 @@ class BoneFractureModel:
         """Generate Grad-CAM heatmap to visualize important regions"""
         # Preprocess the image
         if isinstance(img, str):
-            img = load_img(img, target_size=(224, 224))
-            img_array = img_to_array(img)
+            # Use PIL for image loading instead of keras function
+            pil_img = Image.open(img).resize((224, 224))
+            img_array = np.array(pil_img.convert('RGB'))
         else:
             img_array = cv2.resize(img, (224, 224))
             if len(img_array.shape) == 2:  # Grayscale to RGB

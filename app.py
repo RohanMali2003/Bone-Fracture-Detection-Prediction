@@ -2,13 +2,17 @@ import streamlit as st
 import os
 import numpy as np
 import cv2
-# Try to import from model_fix first, if not available, fallback to model
+# Try to import from model_new first, then model_fix, and finally fallback to model
 try:
-    from model_fix import BoneFractureModel
-    print("Using fixed model implementation")
+    from model_new import BoneFractureModel
+    print("Using new model implementation")
 except ImportError:
-    from model import BoneFractureModel
-    print("Using original model implementation")
+    try:
+        from model_fix import BoneFractureModel
+        print("Using fixed model implementation")
+    except ImportError:
+        from model import BoneFractureModel
+        print("Using original model implementation")
 from PIL import Image
 import matplotlib.pyplot as plt
 import io

@@ -8,8 +8,12 @@ import os
 # Create directory if it doesn't exist
 os.makedirs('model_weights', exist_ok=True)
 
+# Number of features needed for the model (224*224*5 = 250,880 or scaled down)
+# Let's use 62720 features (which is the actual size from the error message)
+feature_size = 62720
+
 # Create a minimal SVC model and fit it with dummy data
-X = np.random.rand(10, 10)  # 10 samples, 10 features
+X = np.random.rand(10, feature_size)  # 10 samples, feature_size features
 y = np.array([0, 1, 0, 1, 0, 1, 0, 1, 0, 1])  # Binary labels
 
 # Create the models

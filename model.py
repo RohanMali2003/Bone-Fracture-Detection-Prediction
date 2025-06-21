@@ -15,7 +15,8 @@ from PIL import Image
 import logging
 tf.get_logger().setLevel(logging.ERROR)
 
-class BoneFractureModel:    def __init__(self, model_path=None):
+class BoneFractureModel:
+    def __init__(self, model_path=None):
         # Initialize basic ML model
         self.svc_model = SVC()
         
@@ -55,8 +56,8 @@ class BoneFractureModel:    def __init__(self, model_path=None):
             img_array = cv2.resize(img, (224, 224))
             if len(img_array.shape) == 2:  # Grayscale to RGB
                 img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
-            
-        img_array = img_array / 255.0  # Normalize        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+              img_array = img_array / 255.0  # Normalize
+        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
         features = self.feature_extractor.predict(img_array)  # Extract features
         return features.reshape(features.shape[0], -1)  # Flatten the features
         
@@ -69,10 +70,11 @@ class BoneFractureModel:    def __init__(self, model_path=None):
             check_is_fitted(self.svc_model)
             prediction = self.svc_model.predict(features)
             return "Fracture" if prediction[0] == 0 else "No Fracture"  # Adjusted class mapping
-        except:            # If not fitted, train a basic model on the fly with default labels
-            # This is a fallback solution and should prompt the user to train the model properly
-            self.svc_model.fit(features, np.array([0]))  # Simple fit with one sample
-            return "Model not properly trained. Please train the model first."
+        except Exception as e:
+            # If not fitted or feature mismatch occurs, return error message
+            print(f"SVC model error: {e}")
+            # Don't attempt to train a model on the fly as it would need 2+ classes
+            return "Model not properly trained. Please train the model with proper training data first."
             
     def detect_anomaly(self, img):
         """Detect anomalies in bone images using One-Class SVM"""

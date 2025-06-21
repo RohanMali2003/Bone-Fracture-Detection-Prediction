@@ -1,3 +1,13 @@
+"""
+Bone Fracture Detection & Prediction Model
+
+This module implements a machine learning model that can detect bone fractures
+from X-ray images and predict fracture risk using a combination of deep learning
+feature extraction and traditional machine learning techniques.
+
+Author: Rohan Mali
+"""
+
 import os
 import cv2
 import numpy as np
@@ -17,18 +27,26 @@ tf.get_logger().setLevel(logging.ERROR)
 
 class BoneFractureModel:
     def __init__(self, model_path=None):
-        # Initialize basic ML model
+        """
+        Initialize the Bone Fracture Detection model.
+        
+        Args:
+            model_path (str, optional): Path to pre-trained model weights.
+                If provided, the model will load weights from this path.
+        """
+        # Initialize Support Vector Classifier for binary classification
         self.svc_model = SVC()
         
-        # Initialize feature extractor
+        # Initialize feature extractor based on MobileNetV2
+        # We use a pre-trained model without the top layers for feature extraction
         self.base_model = MobileNetV2(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
         self.feature_extractor = Model(inputs=self.base_model.input, outputs=self.base_model.output)
         
-        # Initialize anomaly detection model
+        # Initialize anomaly detection model for identifying unusual patterns
         self.anomaly_model = OneClassSVM(kernel="rbf", gamma="auto", nu=0.05)
-        self.scaler = StandardScaler()
+        self.scaler = StandardScaler()  # For scaling features before anomaly detection
         
-        # For Grad-CAM
+        # For Grad-CAM visualization (uses the complete MobileNetV2 model)
         self.full_model = MobileNetV2(weights="imagenet", include_top=True, input_shape=(224, 224, 3))
         
         # Track if models are properly loaded
@@ -47,7 +65,15 @@ class BoneFractureModel:
                 print(f"Warning: Model path {model_path} does not exist. Models will need to be trained.")
     
     def extract_features(self, img):
-        """Extract features from an image using MobileNetV2"""
+        """
+        Extract features from an image using MobileNetV2 pre-trained model.
+        
+        Args:
+            img: Either a file path string or a numpy array containing the image
+            
+        Returns:
+            numpy.ndarray: Flattened feature vector
+        """
         if isinstance(img, str):  # If img is a file path
             # Use PIL for image loading instead of keras function
             pil_img = Image.open(img).resize((224, 224))
@@ -62,17 +88,23 @@ class BoneFractureModel:
         return features.reshape(features.shape[0], -1)  # Flatten the features
     
     def predict_fracture(self, img):
-        """Predict whether an image shows a bone fracture using SVC"""
+        """
+        Predict whether an image shows a bone fracture using SVC.
+        
+        Args:
+            img: Either a file path string or a numpy array containing the image
+            
+        Returns:
+            str: "Fracture" or "No Fracture" based on model prediction
+        """
         features = self.extract_features(img)
         # Check if model is fitted before prediction
-        from sklearn.utils.validation import check_is_fitted        
+        from sklearn.utils.validation import check_is_fitted
         try:
             check_is_fitted(self.svc_model)
             prediction = self.svc_model.predict(features)
             # Return a consistent format: "Fracture" or "No Fracture"
-            # In train_model: Label 0 = normal, Label 1 = fracture
-            # In train_models: classes = {'fractured': 0, 'not_fractured': 1}
-            # Let's be consistent with the majority of the code
+            # Based on train_model labeling: 0 = normal, 1 = fracture
             result = "Fracture" if prediction[0] == 1 else "No Fracture"
             print(f"Prediction value: {prediction[0]}, Result: {result}")
             return result
@@ -83,7 +115,15 @@ class BoneFractureModel:
             return "Model not properly trained. Please train the model with proper training data first."
             
     def detect_anomaly(self, img):
-        """Detect anomalies in bone images using One-Class SVM"""
+        """
+        Detect anomalies in bone images using One-Class SVM.
+        
+        Args:
+            img: Either a file path string or a numpy array containing the image
+            
+        Returns:
+            str: "Potential Fracture Risk" or "Normal" based on anomaly detection
+        """
         features = self.extract_features(img)
         
         # Check if models are fitted
@@ -108,7 +148,16 @@ class BoneFractureModel:
             return "Anomaly detection models not properly trained. Please train the model first."
     
     def get_gradcam_heatmap(self, img, class_index=None):
-        """Generate Grad-CAM heatmap to visualize important regions"""
+        """
+        Generate Grad-CAM heatmap to visualize important regions in the image.
+        
+        Args:
+            img: Either a file path string or a numpy array containing the image
+            class_index (int, optional): Class index to generate heatmap for. Defaults to predicted class.
+            
+        Returns:
+            tuple: (cam, superimposed_img) containing the heatmap and superimposed image
+        """
         # Preprocess the image
         if isinstance(img, str):
             # Use PIL for image loading instead of keras function
@@ -175,7 +224,16 @@ class BoneFractureModel:
         return cam, superimposed_img
     
     def visualize_gradcam(self, img, class_index=None):
-        """Visualize Grad-CAM and return as PIL Image"""
+        """
+        Visualize Grad-CAM and return as PIL Image.
+        
+        Args:
+            img: Either a file path string or a numpy array containing the image
+            class_index (int, optional): Class index to generate heatmap for
+            
+        Returns:
+            BytesIO: Buffer containing the visualization as a PNG image
+        """
         _, superimposed_img = self.get_gradcam_heatmap(img, class_index)
         
         # Convert to PIL Image
@@ -189,7 +247,12 @@ class BoneFractureModel:
         return buf
     
     def save_model(self, path="model_weights"):
-        """Save the models to disk"""
+        """
+        Save the trained models to disk.
+        
+        Args:
+            path (str): Directory to save the models
+        """
         if not os.path.exists(path):
             os.makedirs(path)
         
@@ -203,7 +266,12 @@ class BoneFractureModel:
         joblib.dump(self.anomaly_model, os.path.join(path, "anomaly_model.pkl"))
     
     def load_model(self, path="model_weights"):
-        """Load models from disk"""
+        """
+        Load models from disk.
+        
+        Args:
+            path (str): Directory containing saved models
+        """
         # Load SVC model
         svc_path = os.path.join(path, "svc_model.pkl")
         if os.path.exists(svc_path):
@@ -220,7 +288,16 @@ class BoneFractureModel:
             self.anomaly_model = joblib.load(anomaly_path)
     
     def train_model(self, normal_image_dir, fracture_image_dir):
-        """Train both SVC and anomaly detection models"""
+        """
+        Train both SVC and anomaly detection models.
+        
+        Args:
+            normal_image_dir (str): Directory containing normal bone X-ray images
+            fracture_image_dir (str): Directory containing fractured bone X-ray images
+            
+        Returns:
+            float: Test accuracy of the trained SVC model
+        """
         X_svc = []  # Features for SVC
         Y_svc = []  # Labels for SVC
         X = []      # Features for anomaly detection (only normal samples)
@@ -279,7 +356,15 @@ class BoneFractureModel:
         return self.svc_model.score(xtest, ytest)
     
     def generate_gradcam_visualization(self, img):
-        """Generate Grad-CAM visualization for an image"""
+        """
+        Generate Grad-CAM visualization for an image.
+        
+        Args:
+            img: Either a file path string or a numpy array containing the image
+            
+        Returns:
+            PIL.Image: Image containing original, heatmap, and overlayed visualizations
+        """
         # Get the original image
         if isinstance(img, str):
             original_img = cv2.imread(img)
@@ -327,11 +412,23 @@ class BoneFractureModel:
         return Image.open(buf)
     
     def train_models(self, train_data_path):
-        """Train SVC and Anomaly Detection models"""
+        """
+        Train SVC and Anomaly Detection models.
+        
+        Args:
+            train_data_path (str): Path to training data directory
+            
+        Returns:
+            float: Accuracy of the trained SVC model
+        """
         # Load and preprocess data
         X = []
         Y = []
-        classes = {'fractured': 0, 'not_fractured': 1}
+        # IMPORTANT: This class mapping is REVERSED from what's used in train_model!
+        # Here: fractured = 0, not_fractured = 1
+        # In train_model: normal/not_fractured = 0, fractured = 1
+        # We'll follow train_model's convention in the predict_fracture method
+        classes = {'fractured': 1, 'not_fractured': 0}
         
         # For SVC model
         X_svc = []
@@ -382,8 +479,8 @@ class BoneFractureModel:
         
         # Train One-Class SVM for anomaly detection
         if len(X) > 0:
-            # Filter for non-fractured bones (Y==1)
-            mask = np.array(Y) == 1
+            # Filter for non-fractured bones (Y==0)
+            mask = np.array(Y) == 0
             if np.any(mask):
                 X_non_fractured = X[mask]
                 self.scaler = StandardScaler()
